@@ -2,7 +2,7 @@ import sqlite3
 from functools import wraps
 from forms import AddTaskForm
 from flask import Flask, flash, redirect, render_template, request, session, url_for, g
-
+import pdb
 #config
 
 app = Flask(__name__)
@@ -42,25 +42,16 @@ def login():
 @app.route('/task/')
 @login_required
 def tasks():
+	open_tasks=[]
+	closed_tasks=[]
 	g.db=connect_db()
-	cur=g.db.execute(
-		'select name, due_date, priority, task_id from tasks where status=1'
-		)
-	
-	open_tasks = [
-		dict(name=row[0], due_date=row[1], priority=row[2], 
-			task_id=row[3]) for row in cur.fetchall()
-	]
-	
-	cur=g.db.execute(
-		'select name, due_date, priority, task_id from tasks where status=0'
-		)
 
-	closed_tasks = [
-		dict(name=row[0], due_date=row[1], priority=row[2], 
-			task_id=row[3]) for row in cur.fetchall()
-		]
-
+	cur=g.db.execute('select * from tasks')
+	for row in cur.fetchall():
+		if row[4]==1:
+			open_tasks.append(dict(name=row[1], due_date=row[2], priority=row[3], task_id=row[0]))
+		else:
+			closed_tasks.append(dict(name=row[1], due_date=row[2], priority=row[3], task_id=row[0]))
 	g.db.close()
 	return render_template(
 		'tasks.html', form=AddTaskForm(request.form),
@@ -75,7 +66,7 @@ def new_task():
 	g.db = connect_db()
 	name = request.form['name']
 	date = request.form['due_date']
-	date = request.form['priority']
+	priority = request.form['priority']
 	if not name or not date or not priority:
 		flash("All fields are required. Please try again.")
 		return redirect(url_for('tasks'))
