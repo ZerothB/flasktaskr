@@ -8,8 +8,23 @@
   	<p>
   		{{ form.name.label }}: {{ form.name }}
   		&nbsp;&nbsp;
+      <span class="error">
+        {% if error in form.name.errors %}
+          {% for error in form.name.errors %}
+            {{ error }}
+          {% endfor %}
+        {% endif %}
+      </span>
+
   		{{ form.password.label }}: {{ form.password }}
   		&nbsp;&nbsp;
+      <span class="error">
+        {% if error in form.password.errors %}
+          {% for error in form.password.errors %}
+            {{ error }}
+          {% endfor %}
+        {% endif %}
+      </span>
     	<input type="submit" value="Login">
     </p>
   </form>

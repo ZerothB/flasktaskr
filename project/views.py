@@ -4,6 +4,7 @@ from forms import AddTaskForm, RegisterForm, LoginForm
 from flask import Flask, flash, redirect, render_template, request, session, url_for, g
 import pdb
 import datetime
+from sqlalchemy.exc import IntegrityError
 #config
 
 app = Flask(__name__)
@@ -12,17 +13,32 @@ db = SQLAlchemy(app)
 
 from models import Task, User
 
-def login_required(test):
-	@wraps(test)
-	def wrap(*args, **kwargs):
-		if session['logged_in']:
-			return test(*args, **kwargs)
-		else:
-			flash('You need to login first.')
-	return wrap
+def flash_error(form):
+	for field, errors in form.errors.items():
+		for error in errors:
+			flash(u"Error in the %s field - %s" % (
+				getattr(form, field).label.text, error), 'error')
 
+def login_required(test):
+    @wraps(test)
+    def wrap(*args, **kwargs):
+        if 'logged_in' in session:
+            return test(*args, **kwargs)
+        else:
+            flash('You need to login first.')
+            return redirect(url_for('login'))
+    return wrap
+
+def open_tasks():
+	return db.session.query(Task).filter_by(
+		status='1').order_by(Task.due_date.asc())
+
+def closed_tasks():
+	return db.session.query(Task).filter_by(
+		status='0').order_by(Task.due_date.asc())
 
 @app.route('/logout/')
+@login_required
 def logout():
 	session.pop('logged_in', None)
 	session.pop('user_id', None)
@@ -48,23 +64,21 @@ def login():
 			error = 'Both fields are required.'
 	return render_template('login.html', form=form, error=error)
 
-@app.route('/task/')
+@app.route('/tasks/')
 @login_required
 def tasks():
-	open_tasks = db.session.query(Task).filter_by(status='1').order_by(Task.due_date.asc())
-
-	closed_tasks = db.session.query(Task).filter_by(status='0').order_by(Task.due_date.asc())
-
 	return render_template(
-		'tasks.html', form=AddTaskForm(request.form),
-		open_tasks=open_tasks,
-		closed_tasks=closed_tasks
+		'tasks.html',
+		form=AddTaskForm(request.form),
+		open_tasks=open_tasks(),
+		closed_tasks=closed_tasks()
 	)
 
 
 @app.route('/add/', methods=['GET', 'POST'])
 @login_required
 def new_task():
+	error = None
 	form = AddTaskForm(request.form)
 	if request.method =='POST':
 		if form.validate_on_submit():
@@ -80,7 +94,13 @@ def new_task():
 			db.session.commit()
 
 			flash('New entry was successfully posted. Thanks.')
-		return redirect(url_for('tasks'))
+			return redirect(url_for('tasks'))
+		return render_template('tasks.html', 
+			form=form, 
+			error=error,
+			open_tasks=open_tasks(),
+			closed_tasks=closed_tasks()
+		)
 
 @app.route('/complete/<int:task_id>/')
 @login_required
@@ -112,9 +132,12 @@ def register():
 				form.email.data,
 				form.password.data
 			)
-			db.session.add(new_user)
-			db.session.commit()
-			flash('Thanks for registering. Please login.')
-			return redirect(url_for('login'))
+			try:
+				db.session.add(new_user)
+				db.session.commit()
+				flash('Thanks for registering. Please login.')
+				return redirect(url_for('login'))
+			except IntegrityError:
+				error= 'That username and/or email already exist.'
 	return render_template('register.html', form=form, error=error)
 
